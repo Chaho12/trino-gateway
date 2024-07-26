@@ -56,8 +56,9 @@ import io.trino.sql.tree.TableFunctionInvocation;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.HttpMethod;
 
-import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -93,6 +94,7 @@ public class TrinoQueryProperties
     public static final String TRINO_PREPARED_STATEMENT_HEADER_NAME = "X-Trino-Prepared-Statement";
 
     public TrinoQueryProperties(HttpServletRequest request, RequestAnalyzerConfig config)
+            throws IOException
     {
         isClientsUseV2Format = config.isClientsUseV2Format();
 
@@ -105,27 +107,49 @@ public class TrinoQueryProperties
     }
 
     private void processRequestBody(HttpServletRequest request, RequestAnalyzerConfig config)
+            throws IOException
     {
-        try (BufferedReader reader = request.getReader()) {
-            if (reader == null) {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] temp = new byte[config.getMaxBodySize()];
+        int bytesRead;
+        try (InputStream inputStream = request.getInputStream()) {
+            if (inputStream == null) {
                 log.warn("HTTP request returned null reader");
                 body = "";
                 return;
             }
+            while ((bytesRead = inputStream.read(temp)) != -1) {
+                if (bytesRead == config.getMaxBodySize()) {
+                    //The body is truncated - there is a chance that it could still be syntactically valid SQL, for example if truncated on
+                    //whitespace preceding a UNION. Exit out of caution
+                    log.warn("Query length greater or equal to requestAnalyzerConfig.maxBodySize detected");
+                    return;
+                }
+                buffer.write(temp, 0, bytesRead);
+            }
+//            return new String(buffer.toByteArray(), StandardCharsets.UTF_8);
+
+//        try (BufferedReader reader = request.getReader()) {
+//            if (reader == null) {
+//                log.warn("HTTP request returned null reader");
+//                body = "";
+//                return;
+//            }
 
             Map<String, String> preparedStatements = getPreparedStatements(request);
             SqlParser parser = new SqlParser();
-            reader.mark(config.getMaxBodySize());
-            char[] buffer = new char[config.getMaxBodySize()];
-            int nChars = reader.read(buffer, 0, config.getMaxBodySize());
-            reader.reset();
-            if (nChars == config.getMaxBodySize()) {
-                log.warn("Query length greater or equal to requestAnalyzerConfig.maxBodySize detected");
-                return;
-                //The body is truncated - there is a chance that it could still be syntactically valid SQL, for example if truncated on
-                //whitespace preceding a UNION. Exit out of caution
-            }
-            body = String.valueOf(buffer, 0, nChars);
+//            reader.mark(config.getMaxBodySize());
+//            char[] buffer = new char[config.getMaxBodySize()];
+//            int nChars = reader.read(buffer, 0, config.getMaxBodySize());
+//            reader.reset();
+//            if (nChars == config.getMaxBodySize()) {
+//                log.warn("Query length greater or equal to requestAnalyzerConfig.maxBodySize detected");
+//                return;
+//                //The body is truncated - there is a chance that it could still be syntactically valid SQL, for example if truncated on
+//                //whitespace preceding a UNION. Exit out of caution
+//            }
+//            body = String.valueOf(buffer, 0, nChars);
+            body = buffer.toString(UTF_8);
 
             if (isClientsUseV2Format) {
                 try {
