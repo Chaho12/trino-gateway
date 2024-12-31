@@ -133,7 +133,7 @@ final class TestRoutingGroupSelectorExternal
     {
         RulesExternalConfiguration rulesExternalConfiguration = provideRoutingRuleExternalConfig();
         RoutingGroupSelector routingGroupSelector =
-                RoutingGroupSelector.byRoutingExternal(rulesExternalConfiguration, requestAnalyzerConfig);
+                RoutingGroupSelector.byRoutingExternal(rulesExternalConfiguration, requestAnalyzerConfig, httpClient);
 
         HttpServletRequest mockRequest = prepareMockRequest();
         setMockHeaders(mockRequest);
@@ -162,7 +162,7 @@ final class TestRoutingGroupSelectorExternal
         rulesExternalConfiguration.setUrlPath(null);
 
         // Assert that a RuntimeException is thrown with message
-        assertThatThrownBy(() -> RoutingGroupSelector.byRoutingExternal(rulesExternalConfiguration, requestAnalyzerConfig))
+        assertThatThrownBy(() -> RoutingGroupSelector.byRoutingExternal(rulesExternalConfiguration, requestAnalyzerConfig, httpClient))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("Invalid URL provided, using routing group header as default.");
     }
@@ -175,7 +175,7 @@ final class TestRoutingGroupSelectorExternal
         rulesExternalConfiguration.setExcludeHeaders(List.of("test-exclude-header"));
 
         RoutingGroupSelector routingGroupSelector =
-                RoutingGroupSelector.byRoutingExternal(rulesExternalConfiguration, requestAnalyzerConfig);
+                RoutingGroupSelector.byRoutingExternal(rulesExternalConfiguration, requestAnalyzerConfig, httpClient);
 
         // Mock headers to be read by mockRequest
         HttpServletRequest mockRequest = mock(HttpServletRequest.class);

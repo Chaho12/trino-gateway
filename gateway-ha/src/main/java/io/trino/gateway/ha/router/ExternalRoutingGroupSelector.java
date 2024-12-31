@@ -18,11 +18,9 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import io.airlift.http.client.HttpClient;
-import io.airlift.http.client.HttpClientConfig;
 import io.airlift.http.client.JsonBodyGenerator;
 import io.airlift.http.client.JsonResponseHandler;
 import io.airlift.http.client.Request;
-import io.airlift.http.client.jetty.JettyHttpClient;
 import io.airlift.json.JsonCodec;
 import io.airlift.log.Logger;
 import io.trino.gateway.ha.config.RequestAnalyzerConfig;
@@ -59,7 +57,7 @@ public class ExternalRoutingGroupSelector
             createJsonResponseHandler(jsonCodec(RoutingGroupExternalResponse.class));
 
     @VisibleForTesting
-    ExternalRoutingGroupSelector(RulesExternalConfiguration rulesExternalConfiguration, RequestAnalyzerConfig requestAnalyzerConfig)
+    ExternalRoutingGroupSelector(RulesExternalConfiguration rulesExternalConfiguration, RequestAnalyzerConfig requestAnalyzerConfig, HttpClient httpClient)
     {
         this.excludeHeaders = ImmutableSet.<String>builder()
                 .add("Content-Length")
@@ -76,18 +74,16 @@ public class ExternalRoutingGroupSelector
             throw new RuntimeException("Invalid URL provided, using "
                     + "routing group header as default.", e);
         }
-        httpClient = new JettyHttpClient(new HttpClientConfig());
+        this.httpClient = requireNonNull(httpClient, "httpClient is null");
     }
 
     @Override
     public String findRoutingGroup(HttpServletRequest servletRequest)
     {
-        Request request;
-        JsonBodyGenerator<RoutingGroupExternalBody> requestBodyGenerator;
         try {
             RoutingGroupExternalBody requestBody = createRequestBody(servletRequest);
-            requestBodyGenerator = jsonBodyGenerator(ROUTING_GROUP_EXTERNAL_BODY_JSON_CODEC, requestBody);
-            request = preparePost()
+            JsonBodyGenerator<RoutingGroupExternalBody> requestBodyGenerator = jsonBodyGenerator(ROUTING_GROUP_EXTERNAL_BODY_JSON_CODEC, requestBody);
+            Request request = preparePost()
                     .addHeader(CONTENT_TYPE, JSON_UTF_8.toString())
                     .addHeaders(getValidHeaders(servletRequest))
                     .setUri(uri)
