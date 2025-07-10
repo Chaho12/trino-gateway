@@ -35,29 +35,44 @@ public class LbAuthorizer
             String role,
             @Nullable ContainerRequestContext ctx)
     {
+        String rolePattern = getRolePattern(role);
+        if (rolePattern == null) {
+            log.warn("User '%s' with role %s has no regex match based on ldap search",
+                    principal.getName(), role);
+            return false;
+        }
+
+        boolean hasRole = principal.getMemberOf()
+                .filter(m -> m.matches(rolePattern))
+                .isPresent();
+
+        logAuthorizationResult(principal, role, rolePattern, hasRole);
+        return hasRole;
+    }
+
+    private String getRolePattern(String role)
+    {
         switch (role) {
             case "ADMIN":
-                log.info("User '%s' with memberOf(%s) was identified as ADMIN(%s)",
-                        principal.getName(), principal.getMemberOf(), configuration.getAdmin());
-                return principal.getMemberOf()
-                        .filter(m -> m.matches(configuration.getAdmin()))
-                        .isPresent();
+                return configuration.getAdmin();
             case "USER":
-                log.info("User '%s' with memberOf(%s) identified as USER(%s)",
-                        principal.getName(), principal.getMemberOf(), configuration.getUser());
-                return principal.getMemberOf()
-                        .filter(m -> m.matches(configuration.getUser()))
-                        .isPresent();
+                return configuration.getUser();
             case "API":
-                log.info("User '%s' with memberOf(%s) identified as API(%s)",
-                        principal.getName(), principal.getMemberOf(), configuration.getApi());
-                return principal.getMemberOf()
-                        .filter(m -> m.matches(configuration.getApi()))
-                        .isPresent();
+                return configuration.getApi();
             default:
-                log.warn("User '%s' with role %s has no regex match based on ldap search",
-                        principal.getName(), role);
-                return false;
+                return null;
+        }
+    }
+
+    private void logAuthorizationResult(LbPrincipal principal, String role, String pattern, boolean hasRole)
+    {
+        if (hasRole) {
+            log.info("User '%s' with memberOf(%s) is identified as %s(%s)",
+                    principal.getName(), principal.getMemberOf(), role, pattern);
+        }
+        else {
+            log.info("User '%s' with memberOf(%s) is NOT identified as %s(%s)",
+                    principal.getName(), principal.getMemberOf(), role, pattern);
         }
     }
 }
