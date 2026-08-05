@@ -94,7 +94,6 @@ public class ClusterStatsMetricsMonitor
                 .trinoStatus(TrinoStatus.UNHEALTHY)
                 .proxyTo(backend.getProxyTo())
                 .externalUrl(backend.getExternalUrl())
-                .routingGroup(backend.getRoutingGroup())
                 .build();
     }
 
@@ -128,7 +127,6 @@ public class ClusterStatsMetricsMonitor
                 .queuedQueryCount((int) Float.parseFloat(metrics.get(queuedQueriesMetricName)))
                 .proxyTo(backend.getProxyTo())
                 .externalUrl(backend.getExternalUrl())
-                .routingGroup(backend.getRoutingGroup())
                 .build();
     }
 

@@ -77,6 +77,17 @@ public class HaGatewayTestUtils
         try (Handle handle = jdbi.open()) {
             handle.createUpdate(HaGatewayTestUtils.getResourceFileContent("gateway-ha-persistence-mysql.sql"))
                     .execute();
+            // The bootstrap script is the pre-Flyway schema and H2 is not a supported migration target,
+            // so the tables added by later migrations are created here instead.
+            handle.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS gateway_backend_routing_group (
+                    backend_name VARCHAR(256) NOT NULL,
+                    routing_group VARCHAR(256) NOT NULL,
+                    PRIMARY KEY (backend_name, routing_group),
+                    FOREIGN KEY (backend_name) REFERENCES gateway_backend (name) ON DELETE CASCADE
+                    )
+                    """);
         }
     }
 

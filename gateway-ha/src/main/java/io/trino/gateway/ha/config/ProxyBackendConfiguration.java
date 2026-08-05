@@ -15,11 +15,15 @@ package io.trino.gateway.ha.config;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
+import com.google.common.collect.ImmutableList;
+
+import java.util.List;
 
 public class ProxyBackendConfiguration
 {
     private boolean active = true;
-    private String routingGroup = "adhoc";
+    private List<String> routingGroups = ImmutableList.of("adhoc");
+    private boolean routingGroupsSet;
     private String externalUrl;
     private String name;
     private String proxyTo;
@@ -75,15 +79,46 @@ public class ProxyBackendConfiguration
         this.active = active;
     }
 
+    /**
+     * The routing groups this cluster serves. A cluster can belong to several groups.
+     */
     @JsonProperty
-    public String getRoutingGroup()
+    public List<String> getRoutingGroups()
     {
-        return this.routingGroup;
+        return this.routingGroups;
     }
 
     @JsonSetter
+    public void setRoutingGroups(List<String> routingGroups)
+    {
+        this.routingGroups = routingGroups == null ? ImmutableList.of() : ImmutableList.copyOf(routingGroups);
+        this.routingGroupsSet = true;
+    }
+
+    /**
+     * @deprecated Use {@link #getRoutingGroups()}. Kept for compatibility with clients and
+     *         configuration files written before a cluster could belong to multiple routing groups;
+     *         it returns the first group.
+     */
+    @Deprecated
+    @JsonProperty
+    public String getRoutingGroup()
+    {
+        return this.routingGroups.isEmpty() ? null : this.routingGroups.getFirst();
+    }
+
+    /**
+     * @deprecated Use {@link #setRoutingGroups(List)}. Setting a single group is equivalent to
+     *         setting a list with one element. Ignored when {@code routingGroups} is also provided,
+     *         regardless of the order the two appear in.
+     */
+    @Deprecated
+    @JsonSetter
     public void setRoutingGroup(String routingGroup)
     {
-        this.routingGroup = routingGroup;
+        if (routingGroupsSet) {
+            return;
+        }
+        this.routingGroups = routingGroup == null ? ImmutableList.of() : ImmutableList.of(routingGroup);
     }
 }

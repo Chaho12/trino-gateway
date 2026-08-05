@@ -106,8 +106,7 @@ public class ClusterStatsJmxMonitor
         ClusterStats.Builder clusterStatsBuilder = ClusterStatsMonitor.getClusterStatsBuilder(backend);
 
         clusterStatsBuilder.proxyTo(backend.getProxyTo())
-                .externalUrl(backend.getExternalUrl())
-                .routingGroup(backend.getRoutingGroup());
+                .externalUrl(backend.getExternalUrl());
 
         Optional<JmxResponse> discoveryResponse = queryJmx(backend, "trino.metadata:name=DiscoveryNodeManager");
         Optional<JmxResponse> queryResponse = queryJmx(backend, "trino.execution:name=QueryManager");

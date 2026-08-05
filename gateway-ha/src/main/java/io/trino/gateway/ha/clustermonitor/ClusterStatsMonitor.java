@@ -24,7 +24,6 @@ public interface ClusterStatsMonitor
         ClusterStats.Builder builder = ClusterStats.builder(backend.getName());
         builder.proxyTo(backend.getProxyTo());
         builder.externalUrl(backend.getExternalUrl());
-        builder.routingGroup(backend.getRoutingGroup());
         return builder;
     }
 }

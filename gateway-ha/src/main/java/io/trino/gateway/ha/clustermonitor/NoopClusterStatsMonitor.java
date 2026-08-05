@@ -25,7 +25,6 @@ public class NoopClusterStatsMonitor
                 .trinoStatus(TrinoStatus.HEALTHY)
                 .proxyTo(backend.getProxyTo())
                 .externalUrl(backend.getExternalUrl())
-                .routingGroup(backend.getRoutingGroup())
                 .build();
     }
 }

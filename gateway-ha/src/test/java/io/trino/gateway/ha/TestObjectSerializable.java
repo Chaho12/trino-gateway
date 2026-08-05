@@ -52,9 +52,10 @@ final class TestObjectSerializable
         ProxyBackendConfiguration proxyBackendConfiguration = new ProxyBackendConfiguration();
         proxyBackendConfiguration.setExternalUrl("http://localhost:8080");
         proxyBackendConfiguration.setActive(false);
+        // Set through the deprecated single-valued property, reported as both
         proxyBackendConfiguration.setRoutingGroup("batch-1");
         assertThat(jsonMapper.writeValueAsString(proxyBackendConfiguration))
-                .contains(ImmutableList.of("externalUrl", "active", "routingGroup"));
+                .contains(ImmutableList.of("externalUrl", "active", "\"routingGroup\":\"batch-1\"", "\"routingGroups\":[\"batch-1\"]"));
     }
 
     @Test
@@ -116,11 +117,20 @@ final class TestObjectSerializable
         backendResponse.setName("foo");
         backendResponse.setProxyTo("example.com");
         backendResponse.setActive(false);
-        backendResponse.setRoutingGroup("batch-1");
+        backendResponse.setRoutingGroups(ImmutableList.of("batch-1", "adhoc"));
         backendResponse.setExternalUrl("example.com");
         backendResponse.setStatus("HEALTHY");
         assertThat(jsonMapper.writeValueAsString(backendResponse))
-                .contains(ImmutableList.of("queued", "running", "active", "routingGroup", "externalUrl", "name", "proxyTo", "status"));
+                .contains(ImmutableList.of(
+                        "queued",
+                        "running",
+                        "active",
+                        "\"routingGroups\":[\"batch-1\",\"adhoc\"]",
+                        "\"routingGroup\":\"batch-1\"",
+                        "externalUrl",
+                        "name",
+                        "proxyTo",
+                        "status"));
     }
 
     @Test

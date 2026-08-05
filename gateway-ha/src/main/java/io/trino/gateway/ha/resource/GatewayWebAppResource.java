@@ -106,7 +106,7 @@ public class GatewayWebAppResource
             backendResponse.setProxyTo(b.getProxyTo());
             backendResponse.setActive(b.isActive());
             backendResponse.setStatus(backendState.trinoStatus().toString());
-            backendResponse.setRoutingGroup(b.getRoutingGroup());
+            backendResponse.setRoutingGroups(b.getRoutingGroups());
             backendResponse.setExternalUrl(b.getExternalUrl());
             return backendResponse;
         }).toList();

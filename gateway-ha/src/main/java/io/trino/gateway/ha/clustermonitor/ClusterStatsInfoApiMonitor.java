@@ -49,8 +49,7 @@ public class ClusterStatsInfoApiMonitor
     {
         return ClusterStats.builder(backend.getName()).trinoStatus(checkStatus(backend.getProxyTo()))
                 .proxyTo(backend.getProxyTo())
-                .externalUrl(backend.getExternalUrl())
-                .routingGroup(backend.getRoutingGroup()).build();
+                .externalUrl(backend.getExternalUrl()).build();
     }
 
     private TrinoStatus checkStatus(String baseUrl)

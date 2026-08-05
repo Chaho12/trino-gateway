@@ -20,31 +20,48 @@ import java.util.List;
 
 public interface GatewayBackendDao
 {
-    @SqlQuery("SELECT * FROM gateway_backend")
+    @SqlQuery("SELECT name, backend_url, external_url, active FROM gateway_backend")
     List<GatewayBackend> findAll();
 
     @SqlQuery(
             """
-            SELECT * FROM gateway_backend
+            SELECT name, backend_url, external_url, active FROM gateway_backend
             WHERE name = :name
             LIMIT 1
             """)
     GatewayBackend findFirstByName(String name);
 
+    @SqlQuery("SELECT backend_name, routing_group FROM gateway_backend_routing_group")
+    List<BackendRoutingGroup> findAllRoutingGroups();
+
     @SqlUpdate(
             """
-            INSERT INTO gateway_backend (name, routing_group, backend_url, external_url, active)
-            VALUES (:name, :routingGroup, :backendUrl, :externalUrl, :active)
+            INSERT INTO gateway_backend (name, backend_url, external_url, active)
+            VALUES (:name, :backendUrl, :externalUrl, :active)
             """)
-    void create(String name, String routingGroup, String backendUrl, String externalUrl, boolean active);
+    void create(String name, String backendUrl, String externalUrl, boolean active);
 
     @SqlUpdate(
             """
             UPDATE gateway_backend
-            SET routing_group = :routingGroup, backend_url = :backendUrl, external_url = :externalUrl, active = :active
+            SET backend_url = :backendUrl, external_url = :externalUrl, active = :active
             WHERE name = :name
             """)
-    void update(String name, String routingGroup, String backendUrl, String externalUrl, boolean active);
+    void update(String name, String backendUrl, String externalUrl, boolean active);
+
+    @SqlUpdate(
+            """
+            INSERT INTO gateway_backend_routing_group (backend_name, routing_group)
+            VALUES (:backendName, :routingGroup)
+            """)
+    void addRoutingGroup(String backendName, String routingGroup);
+
+    @SqlUpdate(
+            """
+            DELETE FROM gateway_backend_routing_group
+            WHERE backend_name = :backendName
+            """)
+    void deleteRoutingGroups(String backendName);
 
     @SqlUpdate(
             """

@@ -95,9 +95,40 @@ public abstract class BaseTestDatabaseMigrations
         dropAllTables();
     }
 
+    @Test
+    public void testRoutingGroupBackfill()
+    {
+        createGatewaySchema();
+        Handle jdbiHandle = jdbi.open();
+        jdbiHandle.execute("INSERT INTO gateway_backend (name, routing_group, backend_url, external_url) VALUES ('etl-1', 'etl', 'http://etl-1', 'http://etl-1')");
+        jdbiHandle.execute("INSERT INTO gateway_backend (name, backend_url, external_url) VALUES ('no-group-1', 'http://no-group-1', 'http://no-group-1')");
+
+        FlywayMigration.migrate(dataStoreConfiguration());
+
+        assertThat(routingGroupsOf("etl-1")).containsExactly("etl");
+        // A backend without a routing group is backfilled with the default one
+        assertThat(routingGroupsOf("no-group-1")).containsExactly("adhoc");
+
+        jdbiHandle.execute("DELETE FROM gateway_backend_routing_group");
+        jdbiHandle.execute("DELETE FROM gateway_backend");
+        jdbiHandle.close();
+
+        dropAllTables();
+    }
+
+    private List<String> routingGroupsOf(String backendName)
+    {
+        return jdbi.withHandle(handle -> handle
+                .createQuery("SELECT routing_group FROM gateway_backend_routing_group WHERE backend_name = :name")
+                .bind("name", backendName)
+                .mapTo(String.class)
+                .list());
+    }
+
     protected void verifyGatewaySchema()
     {
         verifyResultSetCount("SELECT name FROM gateway_backend", 0);
+        verifyResultSetCount("SELECT backend_name FROM gateway_backend_routing_group", 0);
         verifyResultSetCount("SELECT query_id FROM query_history", 0);
     }
 
@@ -110,12 +141,15 @@ public abstract class BaseTestDatabaseMigrations
 
     protected void dropAllTables()
     {
+        String backendRoutingGroupTable = "DROP TABLE IF EXISTS gateway_backend_routing_group";
         String gatewayBackendTable = "DROP TABLE IF EXISTS gateway_backend";
         String queryHistoryTable = "DROP TABLE IF EXISTS query_history";
         String flywayHistoryTable = "DROP TABLE IF EXISTS flyway_schema_history";
         Handle jdbiHandle = jdbi.open();
         String sql = "SELECT 1 FROM information_schema.tables WHERE table_schema = '%s'".formatted(schema);
-        verifyResultSetCount(sql, 3);
+        verifyResultSetCount(sql, 4);
+        // Dropped before gateway_backend, which it references
+        jdbiHandle.execute(backendRoutingGroupTable);
         jdbiHandle.execute(gatewayBackendTable);
         jdbiHandle.execute(queryHistoryTable);
         jdbiHandle.execute(flywayHistoryTable);
@@ -123,7 +157,7 @@ public abstract class BaseTestDatabaseMigrations
         jdbiHandle.close();
     }
 
-    private DataStoreConfiguration dataStoreConfiguration()
+    protected DataStoreConfiguration dataStoreConfiguration()
     {
         return new DataStoreConfiguration(
                 container.getJdbcUrl(),

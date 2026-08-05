@@ -97,7 +97,7 @@ add_backend() {
               \"name\": \"$1\",
               \"proxyTo\": \"http://localhost:808$2\",
               \"active\": true,
-              \"routingGroup\": \"adhoc\"
+              \"routingGroups\": [\"adhoc\"]
             }"
 }
 

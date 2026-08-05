@@ -27,7 +27,6 @@ public record ClusterStats(
         TrinoStatus trinoStatus,
         String proxyTo,
         String externalUrl,
-        String routingGroup,
         Map<String, Integer> userQueuedCount)
 {
     public static Builder builder(String clusterId)
@@ -44,7 +43,6 @@ public record ClusterStats(
         private TrinoStatus trinoStatus = TrinoStatus.UNKNOWN;
         private String proxyTo;
         private String externalUrl;
-        private String routingGroup;
         private Map<String, Integer> userQueuedCount;
 
         private Builder(String clusterId)
@@ -88,12 +86,6 @@ public record ClusterStats(
             return this;
         }
 
-        public Builder routingGroup(String routingGroup)
-        {
-            this.routingGroup = routingGroup;
-            return this;
-        }
-
         public Builder userQueuedCount(Map<String, Integer> userQueuedCount)
         {
             this.userQueuedCount = ImmutableMap.copyOf(userQueuedCount);
@@ -110,7 +102,6 @@ public record ClusterStats(
                     trinoStatus,
                     proxyTo,
                     externalUrl,
-                    routingGroup,
                     userQueuedCount);
         }
     }

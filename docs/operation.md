@@ -24,8 +24,9 @@ different purpose.
 ### Database: source of truth for configuration
 
 All cluster configuration is stored persistently in a database. This includes
-each cluster's name, routing group, proxy URL, external URL, and whether it is
-marked active or inactive.
+each cluster's name, routing groups, proxy URL, external URL, and whether it is
+marked active or inactive. A cluster belongs to one or more routing groups, and
+serves requests routed to any of them.
 
 Any change made through the API or the admin UI — adding, updating, activating,
 deactivating, or deleting a cluster — is written to the database immediately.

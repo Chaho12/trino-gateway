@@ -18,19 +18,16 @@ import org.jdbi.v3.core.mapper.reflect.ColumnName;
 import static java.util.Objects.requireNonNull;
 
 /**
- * A row of {@code gateway_backend}. The routing groups a backend belongs to are stored
- * in {@code gateway_backend_routing_group}, see {@link BackendRoutingGroup}.
+ * A row of {@code gateway_backend_routing_group}: a single membership of a backend
+ * cluster in a routing group. A cluster may have several.
  */
-public record GatewayBackend(
-        @ColumnName("name") String name,
-        @ColumnName("backend_url") String backendUrl,
-        @ColumnName("external_url") String externalUrl,
-        @ColumnName("active") boolean active)
+public record BackendRoutingGroup(
+        @ColumnName("backend_name") String backendName,
+        @ColumnName("routing_group") String routingGroup)
 {
-    public GatewayBackend
+    public BackendRoutingGroup
     {
-        requireNonNull(name, "name is null");
-        requireNonNull(backendUrl, "backendUrl is null");
-        requireNonNull(externalUrl, "externalUrl is null");
+        requireNonNull(backendName, "backendName is null");
+        requireNonNull(routingGroup, "routingGroup is null");
     }
 }

@@ -78,8 +78,7 @@ public class ClusterStatsHttpMonitor
                     .runningQueryCount((int) result.get("runningQueries"))
                     .trinoStatus(activeWorkers > 0 ? TrinoStatus.HEALTHY : TrinoStatus.UNHEALTHY)
                     .proxyTo(backend.getProxyTo())
-                    .externalUrl(backend.getExternalUrl())
-                    .routingGroup(backend.getRoutingGroup());
+                    .externalUrl(backend.getExternalUrl());
         }
         catch (Exception e) {
             log.error(e, "Error parsing cluster stats from [%s]", response);

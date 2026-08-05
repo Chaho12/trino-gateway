@@ -9,6 +9,9 @@ import { Role, useAccessStore } from "../store";
 import { BackendData } from "../types/cluster";
 import { TagColor } from "@douyinfe/semi-ui/lib/es/tag";
 
+// The gateway also reports the deprecated single-valued routingGroup, so tolerate both shapes.
+const routingGroupsOf = (record: BackendData): string[] => record.routingGroups ?? [];
+
 export function Cluster() {
   const { Text } = Typography;
   const access = useAccessStore();
@@ -26,6 +29,16 @@ export function Cluster() {
       .then(data => {
         setBackendData(data.sort((a, b) => a.name.localeCompare(b.name)));
       }).catch(() => { });
+  }
+
+  const routingGroupsRender = (_text: any, record: BackendData) => {
+    return (
+      <>
+        {routingGroupsOf(record).map(routingGroup => (
+          <Tag key={routingGroup} color="blue">{routingGroup}</Tag>
+        ))}
+      </>
+    );
   }
 
   const linkRender = (text: string) => {
@@ -97,13 +110,14 @@ export function Cluster() {
               if (!a || !b) return 0;
               return a.name.localeCompare(b.name)
             }} />
-          <Column title="RoutingGroup" dataIndex="routingGroup" key="routingGroup"
+          <Column title="RoutingGroups" dataIndex="routingGroups" key="routingGroups"
+            render={routingGroupsRender}
             sorter={(a, b) => {
               if (!a || !b) return 0;
-              return a.routingGroup.localeCompare(b.routingGroup)
+              return routingGroupsOf(a).join(',').localeCompare(routingGroupsOf(b).join(','))
             }}
             filters={
-              [...new Set(backendData?.map(b => b.routingGroup))]
+              [...new Set(backendData?.flatMap(b => routingGroupsOf(b)))]
                 .map(routingGroup => {
                   return {
                     text: routingGroup,
@@ -112,7 +126,7 @@ export function Cluster() {
                 })}
             onFilter={(value, record) => {
               if (!record) return false;
-              return value === record.routingGroup
+              return routingGroupsOf(record).includes(value)
             }} />
           <Column title="ProxyToUrl" dataIndex="proxyTo" key="proxyTo" render={linkRender} />
           <Column title="ExternalUrl" dataIndex="externalUrl" key="externalUrl" render={linkRender} />
@@ -177,15 +191,16 @@ export function Cluster() {
             disabled={form !== undefined}
             initValue={form?.name}
           />
-          <Form.Input
-            field="routingGroup"
-            label="RoutingGroup"
-            trigger='blur'
+          <Form.TagInput
+            field="routingGroups"
+            label="RoutingGroups"
+            addOnBlur
+            placeholder="Press enter to add a routing group"
             rules={[
               { required: true, message: 'required error' },
-              { type: 'string', message: 'type error' },
+              { type: 'array', min: 1, message: 'at least one routing group' },
             ]}
-            initValue={form?.routingGroup}
+            initValue={form?.routingGroups}
           />
           <Form.Input
             field="proxyTo"

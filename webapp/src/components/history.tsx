@@ -142,7 +142,7 @@ export function History() {
               return a.routingGroup.localeCompare(b.routingGroup);
             }}
             filters={
-                [...new Set(backendData?.map(b => b.routingGroup))]
+                [...new Set(backendData?.flatMap(b => b.routingGroups ?? []))]
                         .map(routingGroup => {
                             return {
                                 text: routingGroup,

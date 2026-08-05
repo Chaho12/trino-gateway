@@ -14,6 +14,7 @@
 package io.trino.gateway.ha.router;
 
 import com.github.benmanes.caffeine.cache.Ticker;
+import com.google.common.collect.ImmutableList;
 import io.airlift.units.Duration;
 import io.trino.gateway.ha.config.DataStoreConfiguration;
 import io.trino.gateway.ha.config.DatabaseCacheConfiguration;
@@ -112,6 +113,77 @@ final class TestHaGatewayManager
         haGatewayManager.addBackend(adhoc2);
         ProxyBackendConfiguration backendConfigurationAdhoc2 = haGatewayManager.getActiveBackends("adhoc2").getFirst();
         assertThat(backendConfigurationAdhoc2.getExternalUrl()).isEqualTo(adhoc2.getExternalUrl());
+    }
+
+    @Test
+    void testBackendInMultipleRoutingGroups()
+    {
+        JdbcConnectionManager connectionManager = createTestingJdbcConnectionManager(dataStoreConfig());
+        HaGatewayManager haGatewayManager = new HaGatewayManager(connectionManager.getJdbi(), new RoutingConfiguration(), new DatabaseCacheConfiguration());
+
+        ProxyBackendConfiguration shared = new ProxyBackendConfiguration();
+        shared.setActive(true);
+        shared.setRoutingGroups(ImmutableList.of("etl", "adhoc"));
+        shared.setName("shared1");
+        shared.setProxyTo("shared1.trino.gateway.io");
+        shared.setExternalUrl("shared1.external.trino.gateway.io");
+        haGatewayManager.addBackend(shared);
+
+        // One registration, serving both groups
+        assertThat(haGatewayManager.getAllBackends()).hasSize(1);
+        assertThat(haGatewayManager.getActiveBackends("etl")).hasSize(1);
+        assertThat(haGatewayManager.getActiveBackends("adhoc")).hasSize(1);
+        assertThat(haGatewayManager.getActiveDefaultBackends()).hasSize(1);
+        assertThat(haGatewayManager.getBackendByName("shared1").orElseThrow().getRoutingGroups())
+                .containsExactlyInAnyOrder("etl", "adhoc");
+
+        // Dropping a membership on update removes the cluster from that group only
+        shared.setRoutingGroups(ImmutableList.of("etl"));
+        haGatewayManager.updateBackend(shared);
+        assertThat(haGatewayManager.getActiveBackends("etl")).hasSize(1);
+        assertThat(haGatewayManager.getActiveBackends("adhoc")).isEmpty();
+
+        // A deactivated cluster is in no group, but keeps its memberships
+        haGatewayManager.deactivateBackend("shared1");
+        assertThat(haGatewayManager.getActiveBackends("etl")).isEmpty();
+        assertThat(haGatewayManager.getBackendByName("shared1").orElseThrow().getRoutingGroups())
+                .containsExactly("etl");
+        haGatewayManager.activateBackend("shared1");
+        assertThat(haGatewayManager.getActiveBackends("etl")).hasSize(1);
+
+        // Deleting the cluster deletes its memberships
+        haGatewayManager.deleteBackend("shared1");
+        assertThat(haGatewayManager.getAllBackends()).isEmpty();
+        assertThat(haGatewayManager.getActiveBackends("etl")).isEmpty();
+    }
+
+    @Test
+    void testRoutingGroupValidation()
+    {
+        JdbcConnectionManager connectionManager = createTestingJdbcConnectionManager(dataStoreConfig());
+        HaGatewayManager haGatewayManager = new HaGatewayManager(connectionManager.getJdbi(), new RoutingConfiguration(), new DatabaseCacheConfiguration());
+
+        ProxyBackendConfiguration backend = new ProxyBackendConfiguration();
+        backend.setName("invalid1");
+        backend.setProxyTo("invalid1.trino.gateway.io");
+        backend.setExternalUrl("invalid1.trino.gateway.io");
+
+        backend.setRoutingGroups(ImmutableList.of());
+        assertThatThrownBy(() -> haGatewayManager.addBackend(backend))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Backend must belong to at least one routing group");
+
+        backend.setRoutingGroups(ImmutableList.of("etl", " "));
+        assertThatThrownBy(() -> haGatewayManager.addBackend(backend))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Backend routing group cannot be null or blank");
+
+        backend.setRoutingGroups(ImmutableList.of("etl", "etl"));
+        assertThatThrownBy(() -> haGatewayManager.addBackend(backend))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Backend routing groups cannot contain duplicates: [etl, etl]");
+
+        assertThat(haGatewayManager.getAllBackends()).isEmpty();
     }
 
     @Test

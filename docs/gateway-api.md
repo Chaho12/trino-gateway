@@ -18,9 +18,19 @@ curl -X POST http://localhost:8080/gateway/backend/modify/add \
  -d '{  "name": "trino-3",
         "proxyTo": "http://localhost:8083",
         "active": true,
-        "routingGroup": "adhoc"
+        "routingGroups": ["adhoc"]
     }'
 ```
+
+A cluster can serve more than one routing group, so `routingGroups` takes a list.
+For example, an `etl` cluster that also absorbs adhoc traffic off-peak is
+registered with `"routingGroups": ["etl", "adhoc"]`. The list must contain at
+least one group, and no blank or duplicate entries.
+
+The single-valued `routingGroup` field is deprecated but still accepted, and is
+equivalent to a list with one element. If both fields are sent, `routingGroups`
+takes precedence. Responses report `routingGroups` together with `routingGroup`
+holding the first group, so existing clients keep working.
 
 If the Trino cluster URL is different from the `proxyTo` URL, for example if
 they are internal and external hostnames used, you can use the optional
@@ -32,7 +42,7 @@ curl -X POST http://localhost:8080/gateway/backend/modify/add \
  -d '{  "name": "trino-3",
         "proxyTo": "http://localhost:8083",
         "active": true,
-        "routingGroup": "adhoc",
+        "routingGroups": ["adhoc"],
         "externalUrl": "http://localhost:8084"
     }'
 ```
@@ -45,7 +55,7 @@ curl -X POST http://localhost:8080/gateway/backend/modify/update \
  -d '{  "name": "trino-3",
         "proxyTo": "http://localhost:8083",
         "active": true,
-        "routingGroup": "adhoc",
+        "routingGroups": ["adhoc"],
         "externalUrl": "http://localhost:8084"
     }'
 ```
@@ -64,21 +74,21 @@ Returns a JSON array of Trino cluster:
         "name": "trino-1",
         "proxyTo": "http://localhost:8081",
         "active": true,
-        "routingGroup": "adhoc",
+        "routingGroups": ["adhoc"],
         "externalUrl": "http://localhost:8081"
     },
     {
         "name": "trino-2",
         "proxyTo": "http://localhost:8082",
         "active": true,
-        "routingGroup": "adhoc",
+        "routingGroups": ["adhoc"],
         "externalUrl": "http://localhost:8082"
     },
     {
         "name": "trino-3",
         "proxyTo": "http://localhost:8083",
         "active": true,
-        "routingGroup": "adhoc",
+        "routingGroups": ["adhoc"],
         "externalUrl": "http://localhost:8084"
     }
 ]
@@ -110,7 +120,7 @@ Returns a JSON array of active Trino clusters:
         "name": "trino-1",
         "proxyTo": "http://localhost:8081",
         "active": true,
-        "routingGroup": "adhoc",
+        "routingGroups": ["adhoc"],
         "externalUrl": "http://localhost:8081"
     }
 ]

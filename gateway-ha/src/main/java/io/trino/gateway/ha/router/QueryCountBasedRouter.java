@@ -46,7 +46,6 @@ public class QueryCountBasedRouter
         private TrinoStatus trinoStatus;
         private String proxyTo;
         private String externalUrl;
-        private String routingGroup;
         private String clusterId;
         private Map<String, Integer> userQueuedCount;
 
@@ -58,7 +57,6 @@ public class QueryCountBasedRouter
             trinoStatus = stats.trinoStatus();
             proxyTo = stats.proxyTo();
             externalUrl = stats.externalUrl();
-            routingGroup = stats.routingGroup();
             if (stats.userQueuedCount() != null) {
                 userQueuedCount = new HashMap<String, Integer>(stats.userQueuedCount());
             }
@@ -122,16 +120,6 @@ public class QueryCountBasedRouter
             this.externalUrl = externalUrl;
         }
 
-        public String routingGroup()
-        {
-            return this.routingGroup;
-        }
-
-        public void routingGroup(String routingGroup)
-        {
-            this.routingGroup = routingGroup;
-        }
-
         public Map<String, Integer> userQueuedCount()
         {
             return this.userQueuedCount;
@@ -147,7 +135,6 @@ public class QueryCountBasedRouter
             ProxyBackendConfiguration backendConfiguration = new ProxyBackendConfiguration();
             backendConfiguration.setExternalUrl(externalUrl);
             backendConfiguration.setProxyTo(proxyTo);
-            backendConfiguration.setRoutingGroup(routingGroup);
             backendConfiguration.setActive(true);
             return backendConfiguration;
         }

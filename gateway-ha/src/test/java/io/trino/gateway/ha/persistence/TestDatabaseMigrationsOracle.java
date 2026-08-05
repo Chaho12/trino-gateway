@@ -40,17 +40,28 @@ final class TestDatabaseMigrationsOracle
     }
 
     @Override
+    public void testRoutingGroupBackfill()
+    {
+        /*
+         * Same as testMigrationWithExistingGatewaySchema: there is no pre-existing
+         * Oracle deployment whose single-valued routing group could be backfilled.
+         */
+    }
+
+    @Override
     protected void dropAllTables()
     {
         /*
          * Flyway configuration items including table names are case-sensitive.
          * For this reason, if you remove the double quotes on flyway_schema_history,
          * you will get a table not found error.
+         *
+         * gateway_backend_routing_group is dropped first, it references gateway_backend.
          */
-        List<String> tables = ImmutableList.of("gateway_backend", "query_history", "\"flyway_schema_history\"");
+        List<String> tables = ImmutableList.of("gateway_backend_routing_group", "gateway_backend", "query_history", "\"flyway_schema_history\"");
         Handle jdbiHandle = jdbi.open();
         String sql = "SELECT 1 FROM all_tables WHERE owner = '%s'".formatted(schema);
-        verifyResultSetCount(sql, 3);
+        verifyResultSetCount(sql, 4);
         tables.forEach(table -> jdbiHandle.execute("DROP TABLE " + table));
         verifyResultSetCount(sql, 0);
         jdbiHandle.close();

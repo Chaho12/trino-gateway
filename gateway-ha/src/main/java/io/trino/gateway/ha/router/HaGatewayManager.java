@@ -18,19 +18,22 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.Ticker;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSetMultimap;
+import com.google.common.collect.SetMultimap;
 import com.google.inject.Inject;
 import io.airlift.log.Logger;
 import io.airlift.stats.CounterStat;
 import io.trino.gateway.ha.config.DatabaseCacheConfiguration;
 import io.trino.gateway.ha.config.ProxyBackendConfiguration;
 import io.trino.gateway.ha.config.RoutingConfiguration;
+import io.trino.gateway.ha.persistence.dao.BackendRoutingGroup;
 import io.trino.gateway.ha.persistence.dao.GatewayBackend;
 import io.trino.gateway.ha.persistence.dao.GatewayBackendDao;
 import org.jdbi.v3.core.Jdbi;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -43,12 +46,25 @@ public class HaGatewayManager
     private static final Logger log = Logger.get(HaGatewayManager.class);
     private static final Object ALL_BACKEND_CACHE_KEY = new Object();
 
+    private final Jdbi jdbi;
     private final GatewayBackendDao dao;
     private final String defaultRoutingGroup;
-    private final LoadingCache<Object, List<GatewayBackend>> backendCache;
+    private final LoadingCache<Object, BackendSnapshot> backendCache;
 
     private final CounterStat backendLookupSuccesses = new CounterStat();
     private final CounterStat backendLookupFailures = new CounterStat();
+
+    /**
+     * A consistent view of {@code gateway_backend} and the routing groups every backend belongs to.
+     */
+    private record BackendSnapshot(List<GatewayBackend> backends, SetMultimap<String, String> routingGroupsByBackend)
+    {
+        private BackendSnapshot
+        {
+            backends = ImmutableList.copyOf(backends);
+            routingGroupsByBackend = ImmutableSetMultimap.copyOf(routingGroupsByBackend);
+        }
+    }
 
     @Inject
     public HaGatewayManager(Jdbi jdbi, RoutingConfiguration routingConfiguration, DatabaseCacheConfiguration databaseCacheConfiguration)
@@ -59,7 +75,8 @@ public class HaGatewayManager
     @VisibleForTesting
     public HaGatewayManager(Jdbi jdbi, RoutingConfiguration routingConfiguration, DatabaseCacheConfiguration databaseCacheConfiguration, Ticker ticker)
     {
-        dao = requireNonNull(jdbi, "jdbi is null").onDemand(GatewayBackendDao.class);
+        this.jdbi = requireNonNull(jdbi, "jdbi is null");
+        dao = jdbi.onDemand(GatewayBackendDao.class);
         defaultRoutingGroup = routingConfiguration.getDefaultRoutingGroup();
 
         Caffeine<Object, Object> caffeineBuilder = Caffeine.newBuilder()
@@ -75,23 +92,32 @@ public class HaGatewayManager
             // No-op cache: never stores anything
             caffeineBuilder = caffeineBuilder.maximumSize(0);
         }
-        backendCache = caffeineBuilder.build(this::fetchAllBackends);
+        backendCache = caffeineBuilder.build(this::fetchBackendSnapshot);
 
         // Load the data once during initialization. This ensures a fail-fast behavior in case of database misconfiguration.
         try {
-            List<GatewayBackend> _ = backendCache.get(ALL_BACKEND_CACHE_KEY);
+            BackendSnapshot _ = backendCache.get(ALL_BACKEND_CACHE_KEY);
         }
         catch (Exception e) {
             throw new RuntimeException("Failed to load gateway backend", e);
         }
     }
 
-    private List<GatewayBackend> fetchAllBackends(Object ignored)
+    private BackendSnapshot fetchBackendSnapshot(Object ignored)
     {
         try {
-            List<GatewayBackend> backends = dao.findAll();
+            // Both tables are read in a single transaction, so that memberships always match the backends they belong to.
+            BackendSnapshot snapshot = jdbi.inTransaction(handle -> {
+                GatewayBackendDao transactionDao = handle.attach(GatewayBackendDao.class);
+                List<GatewayBackend> backends = transactionDao.findAll();
+                ImmutableSetMultimap.Builder<String, String> routingGroups = ImmutableSetMultimap.builder();
+                for (BackendRoutingGroup membership : transactionDao.findAllRoutingGroups()) {
+                    routingGroups.put(membership.backendName(), membership.routingGroup());
+                }
+                return new BackendSnapshot(backends, routingGroups.build());
+            });
             backendLookupSuccesses.update(1);
-            return backends;
+            return snapshot;
         }
         catch (Exception e) {
             backendLookupFailures.update(1);
@@ -107,7 +133,7 @@ public class HaGatewayManager
         backendCache.invalidate(ALL_BACKEND_CACHE_KEY);
     }
 
-    private List<GatewayBackend> getAllBackendsInternal()
+    private BackendSnapshot getBackendSnapshot()
     {
         try {
             return backendCache.get(ALL_BACKEND_CACHE_KEY);
@@ -120,17 +146,17 @@ public class HaGatewayManager
     @Override
     public List<ProxyBackendConfiguration> getAllBackends()
     {
-        List<GatewayBackend> proxyBackendList = getAllBackendsInternal();
-        return upcast(proxyBackendList);
+        BackendSnapshot snapshot = getBackendSnapshot();
+        return upcast(snapshot, snapshot.backends());
     }
 
     @Override
     public List<ProxyBackendConfiguration> getAllActiveBackends()
     {
-        List<GatewayBackend> proxyBackendList = getAllBackendsInternal().stream()
+        BackendSnapshot snapshot = getBackendSnapshot();
+        return upcast(snapshot, snapshot.backends().stream()
                 .filter(GatewayBackend::active)
-                .collect(toImmutableList());
-        return upcast(proxyBackendList);
+                .collect(toImmutableList()));
     }
 
     @Override
@@ -148,20 +174,22 @@ public class HaGatewayManager
     @Override
     public List<ProxyBackendConfiguration> getActiveBackends(String routingGroup)
     {
-        List<GatewayBackend> proxyBackendList = getAllBackendsInternal().stream()
+        BackendSnapshot snapshot = getBackendSnapshot();
+        return upcast(snapshot, snapshot.backends().stream()
                 .filter(GatewayBackend::active)
-                .filter(backend -> backend.routingGroup().equals(routingGroup))
-                .collect(toImmutableList());
-        return upcast(proxyBackendList);
+                .filter(backend -> snapshot.routingGroupsByBackend().containsEntry(backend.name(), routingGroup))
+                .collect(toImmutableList()));
     }
 
     @Override
     public Optional<ProxyBackendConfiguration> getBackendByName(String name)
     {
-        List<GatewayBackend> proxyBackendList = getAllBackendsInternal().stream()
+        BackendSnapshot snapshot = getBackendSnapshot();
+        return upcast(snapshot, snapshot.backends().stream()
                 .filter(backend -> backend.name().equals(name))
-                .collect(toImmutableList());
-        return upcast(proxyBackendList).stream().findAny();
+                .collect(toImmutableList()))
+                .stream()
+                .findAny();
     }
 
     @Override
@@ -200,7 +228,12 @@ public class HaGatewayManager
         validateBackendConfiguration(backend);
         String backendProxyTo = removeTrailingSlash(backend.getProxyTo());
         String backendExternalUrl = removeTrailingSlash(backend.getExternalUrl());
-        dao.create(backend.getName(), backend.getRoutingGroup(), backendProxyTo, backendExternalUrl, backend.isActive());
+        // The backend and its routing groups live in two tables and must be written atomically.
+        jdbi.useTransaction(handle -> {
+            GatewayBackendDao transactionDao = handle.attach(GatewayBackendDao.class);
+            transactionDao.create(backend.getName(), backendProxyTo, backendExternalUrl, backend.isActive());
+            addRoutingGroups(transactionDao, backend);
+        });
         invalidateBackendCache();
         return backend;
     }
@@ -211,45 +244,64 @@ public class HaGatewayManager
         validateBackendConfiguration(backend);
         String backendProxyTo = removeTrailingSlash(backend.getProxyTo());
         String backendExternalUrl = removeTrailingSlash(backend.getExternalUrl());
-        GatewayBackend model = dao.findFirstByName(backend.getName());
-        if (model == null) {
-            dao.create(backend.getName(), backend.getRoutingGroup(), backendProxyTo, backendExternalUrl, backend.isActive());
-        }
-        else {
-            dao.update(backend.getName(), backend.getRoutingGroup(), backendProxyTo, backendExternalUrl, backend.isActive());
-            logActivationStatusChange(backend.getName(), backend.isActive(), model.active());
-        }
+        jdbi.useTransaction(handle -> {
+            GatewayBackendDao transactionDao = handle.attach(GatewayBackendDao.class);
+            GatewayBackend model = transactionDao.findFirstByName(backend.getName());
+            if (model == null) {
+                transactionDao.create(backend.getName(), backendProxyTo, backendExternalUrl, backend.isActive());
+            }
+            else {
+                transactionDao.update(backend.getName(), backendProxyTo, backendExternalUrl, backend.isActive());
+                logActivationStatusChange(backend.getName(), backend.isActive(), model.active());
+            }
+            transactionDao.deleteRoutingGroups(backend.getName());
+            addRoutingGroups(transactionDao, backend);
+        });
         invalidateBackendCache();
         return backend;
+    }
+
+    private static void addRoutingGroups(GatewayBackendDao dao, ProxyBackendConfiguration backend)
+    {
+        for (String routingGroup : backend.getRoutingGroups()) {
+            dao.addRoutingGroup(backend.getName(), routingGroup);
+        }
     }
 
     private static void validateBackendConfiguration(ProxyBackendConfiguration backend)
     {
         checkArgument(backend.getName() != null, "Backend name cannot be null");
         checkArgument(backend.getProxyTo() != null, "Backend proxyTo URL cannot be null");
-        checkArgument(backend.getRoutingGroup() != null, "Backend routing group cannot be null");
         checkArgument(backend.getExternalUrl() != null, "Backend external url cannot be null");
+        List<String> routingGroups = backend.getRoutingGroups();
+        checkArgument(!routingGroups.isEmpty(), "Backend must belong to at least one routing group");
+        checkArgument(routingGroups.stream().noneMatch(routingGroup -> routingGroup == null || routingGroup.isBlank()), "Backend routing group cannot be null or blank");
+        checkArgument(Set.copyOf(routingGroups).size() == routingGroups.size(), "Backend routing groups cannot contain duplicates: %s", routingGroups);
     }
 
     public void deleteBackend(String name)
     {
-        dao.deleteByName(name);
+        jdbi.useTransaction(handle -> {
+            GatewayBackendDao transactionDao = handle.attach(GatewayBackendDao.class);
+            transactionDao.deleteRoutingGroups(name);
+            transactionDao.deleteByName(name);
+        });
         invalidateBackendCache();
     }
 
-    private static List<ProxyBackendConfiguration> upcast(List<GatewayBackend> gatewayBackendList)
+    private static List<ProxyBackendConfiguration> upcast(BackendSnapshot snapshot, List<GatewayBackend> gatewayBackendList)
     {
-        List<ProxyBackendConfiguration> proxyBackendConfigurations = new ArrayList<>();
-        for (GatewayBackend model : gatewayBackendList) {
-            ProxyBackendConfiguration backendConfig = new ProxyBackendConfiguration();
-            backendConfig.setActive(model.active());
-            backendConfig.setRoutingGroup(model.routingGroup());
-            backendConfig.setProxyTo(model.backendUrl());
-            backendConfig.setExternalUrl(model.externalUrl());
-            backendConfig.setName(model.name());
-            proxyBackendConfigurations.add(backendConfig);
-        }
-        return proxyBackendConfigurations;
+        return gatewayBackendList.stream()
+                .map(model -> {
+                    ProxyBackendConfiguration backendConfig = new ProxyBackendConfiguration();
+                    backendConfig.setActive(model.active());
+                    backendConfig.setRoutingGroups(ImmutableList.copyOf(snapshot.routingGroupsByBackend().get(model.name())));
+                    backendConfig.setProxyTo(model.backendUrl());
+                    backendConfig.setExternalUrl(model.externalUrl());
+                    backendConfig.setName(model.name());
+                    return backendConfig;
+                })
+                .collect(toImmutableList());
     }
 
     public static String removeTrailingSlash(String url)
