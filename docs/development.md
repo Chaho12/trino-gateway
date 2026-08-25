@@ -124,7 +124,7 @@ A full release process consists a number of steps.
     down manually, for example with:
 
     ```shell
-    docker pull trinodb/trino-gateway:17
+    docker pull trinodb/trino-gateway:21
     ```
     
     You can also verify availability at

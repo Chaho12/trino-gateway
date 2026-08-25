@@ -10,7 +10,7 @@ The Docker image of Trino Gateway is designed for the following use cases:
 The latest version of the Trino Gateway container image is available on 
 DockerHub with the identifier `trinodb/trino-gateway`. Append  where 
 `:<version>` with a version number to use a specific release, for example 
-`trinodb/trino-gateway:11`.
+`trinodb/trino-gateway:21`.
 
 ## Production setup
 
@@ -52,8 +52,8 @@ number and`-yyy` is the processor architecture:
 ```bash
 $ docker images
 REPOSITORY            TAG                  IMAGE ID       CREATED          SIZE
-trino-gateway         6-SNAPSHOT-arm64     bc5e8b0db63c   35 seconds ago   523MB
-trino-gateway         6-SNAPSHOT-amd64     6c066fa5b0c5   36 seconds ago   518MB
+trino-gateway         21-SNAPSHOT-arm64    bc5e8b0db63c   35 seconds ago   523MB
+trino-gateway         21-SNAPSHOT-amd64    6c066fa5b0c5   36 seconds ago   518MB
 ...
 ```
 
@@ -61,7 +61,7 @@ To build an image for a specific, already released version of Trino Gateway, use
 the `-r` option. The build script downloads all the required artifacts:
 
 ```bash
-./build.sh -r 4
+./build.sh -r 21
 ```
 
 Set the environment variable `TRINO_GATEWAY_BASE_IMAGE` to use a specific base
@@ -82,14 +82,14 @@ the following command examples using `docker compose`.
 Use a locally-built image on a ARM-based machine, such as a Macbook laptop.
 
 ```shell
-export TRINO_GATEWAY_IMAGE="trino-gateway:6-SNAPSHOT-arm64"
+export TRINO_GATEWAY_IMAGE="trino-gateway:21-SNAPSHOT-arm64"
 ```
 
 Use a locally-built image on a AMD64-based machine, such as a typical Windows
 or Linux desktop or laptop.
 
 ```shell
-export TRINO_GATEWAY_IMAGE="trino-gateway:6-SNAPSHOT-amd64"
+export TRINO_GATEWAY_IMAGE="trino-gateway:21-SNAPSHOT-amd64"
 ```
 
 Use a published image from Docker Hub.
